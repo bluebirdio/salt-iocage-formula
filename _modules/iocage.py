@@ -28,6 +28,8 @@ def __virtual__():
     else:
         return False
 
+def _iocage(**kwargs):
+    return ioc.IOCage(**kwargs)
 
 def _option_exists(name, **kwargs):
     '''
@@ -66,62 +68,11 @@ def _parse_properties(**kwargs):
         ['%s="%s"' % (k, v) for k, v in kwargs.items() if not k.startswith('__')])
 
 
-def _list(option=None, **kwargs):
-    '''
-    Returns list of jails, templates or releases.
-    `Option` can be None or '' for jails list, '-t' for templates or '-r'
-    for downloaded releases
-    '''
-    return iocage.list("all")
-    if option not in [None, '', '-t', '-r']:
-        raise SaltInvocationError('Bad option name in command _list')
-
-    cmd = 'iocage list -h'
-    if option == '-t' or option == '-r':
-        cmd = '%s %s' % (cmd, option)
-    lines = _exec(cmd, **kwargs).split('\n')
-
-    if len(lines) > 0:
-        if option == '-r':
-            headers = ['RELEASE']
-        else:
-            headers = [_ for _ in lines[0].split(' ') if len(_) > 0]
-
-        jails = []
-        if len(lines) > 1:
-            for l in lines[1:]:
-                # omit all non-iocage jails
-                if l == '--- non iocage jails currently active ---':
-                    break
-                jails.append({
-                    headers[k]: v for k, v in enumerate([_ for _ in l.split(' ')
-                                                         if len(_) > 0])
-                })
-
-        return jails
-    else:
-        raise CommandExecutionError(
-            'Error in command "%s" : no results found' % (cmd, ))
-
-
-def _display_list(items_list):
-    '''
-    Format display for the list of jails, templates or releases
-    '''
-    ret = []
-
-    for item in items_list:
-        ret.append(','.join(['%s=%s' % (k, v) for k, v in item.items()]),)
-
-    return '\n'.join(ret)
-
-
 def _manage_state(state, jail_name, **kwargs):
     '''
     Start / Stop / Reboot / Destroy a jail `jail_name`
     '''
-    existing_jails = _list()
-    for jail in existing_jails:
+    for jail in list_jails():
         if jail_name == jail['UUID'] or jail_name == jail['TAG']:
             if ((state == 'start' and jail['STATE'] == 'down')
                     or (state == 'stop' and jail['STATE'] == 'up')
@@ -149,7 +100,7 @@ def list_jails(**kwargs):
 
         salt '*' iocage.list_jails
     '''
-    return _display_list(_list())
+    return _iocage().list("all")
 
 
 def list_templates(**kwargs):
@@ -162,7 +113,7 @@ def list_templates(**kwargs):
 
         salt '*' iocage.list_templates
     '''
-    return _display_list(_list('-t'))
+    return _iocage().list("template")
 
 
 def list_releases(**kwargs):
@@ -175,7 +126,7 @@ def list_releases(**kwargs):
 
         salt '*' iocage.list_releases
     '''
-    return _display_list(_list('-r'))
+    return _iocage().list("base")
 
 
 def list_properties(jail_name, **kwargs):
@@ -190,7 +141,10 @@ def list_properties(jail_name, **kwargs):
         salt '*' iocage.list_properties defaults
     '''
     # Return the same output with defaults or for a given jail
-    return (jail_name == 'defaults') ? _get_default('all') : get(jail_name)
+    if (jail_name == 'defaults'):
+        return _get_default('all')
+    else: 
+        return get(jail_name)
 
 
 def get_property(property_name, jail_name, **kwargs):
@@ -206,7 +160,10 @@ def get_property(property_name, jail_name, **kwargs):
     '''
 
     # Return the same output with defaults or for a given jail
-    return (jail_name == 'defaults') ? _get_default(property_name) : get(jail_name, property_name)
+    if (jail_name == 'defaults'):
+        return _get_default(property_name)
+    else: 
+        return get(jail_name, property_name)
 
 
 def set_property(jail_name, **kwargs):
@@ -255,7 +212,8 @@ def get(jail_name, property='all', **kwargs):
     '''
     try:
         jail = None
-        iocage = ioc.IOCage(jail=jail_name)
+        iocage = _iocage(jail=jail_name)
+
         for j in iocage.jails.items():
             if j[0] == jail_name:
                 jail = iocage.get(property)
@@ -267,7 +225,7 @@ def get(jail_name, property='all', **kwargs):
 
 
 def _get_default(property='all'):
-    return iocage.IOCage(jail='default').get(property)
+    return _iocage(jail='default').get(property)
 
 
 def create(jail_type="full", template_id=None, **kwargs):
@@ -307,8 +265,7 @@ def create(jail_type="full", template_id=None, **kwargs):
     # if we would like to specify a tag value for the jail
     # check if another jail have not the same tag
     if 'tag' in kwargs.keys():
-        existing_jails = _list()
-        if kwargs['tag'] in [k['TAG'] for k in existing_jails]:
+        if kwargs['tag'] in [k['TAG'] for k in list_jails()]:
             raise SaltInvocationError(
                 'Tag %s already exists' % (kwargs['tag'],))
 
