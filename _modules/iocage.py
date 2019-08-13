@@ -12,6 +12,8 @@ import logging
 import salt.utils
 from salt.exceptions import CommandExecutionError, SaltInvocationError
 
+import iocage_lib.iocage as ioc
+
 log = logging.getLogger(__name__)
 
 __virtualname__ = 'iocage'
@@ -82,10 +84,11 @@ def _list(option=None, **kwargs):
     `Option` can be None or '' for jails list, '-t' for templates or '-r'
     for downloaded releases
     '''
+    return iocage.list("all")
     if option not in [None, '', '-t', '-r']:
         raise SaltInvocationError('Bad option name in command _list')
 
-    cmd = 'iocage list'
+    cmd = 'iocage list -h'
     if option == '-t' or option == '-r':
         cmd = '%s %s' % (cmd, option)
     lines = _exec(cmd, **kwargs).split('\n')
@@ -259,6 +262,29 @@ def fetch(release=None, **kwargs):
         return _exec('iocage fetch release=%s' % (current_release,))
     else:
         return _exec('iocage fetch release=%s' % (release,))
+
+
+def get(jail_name, **kwargs):
+    '''
+    Get a jail and its properties by name
+
+    CLI Example:
+
+    .. code-block:: bash
+
+        salt '*' iocage.get <jail_name>
+    '''
+    try:
+        jail = ioc.IOCage(jail=jail_name)
+        props = jail.get("all")
+
+        # iocage returns a substring match: search for 'test' returns 'test123'
+        # Return properties for exact-name jail only.
+        if props['host_hostname'] == jail_name:
+            return props
+
+    except RuntimeError:
+        return None
 
 
 def create(jail_type="full", template_id=None, **kwargs):
