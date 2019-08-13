@@ -201,6 +201,9 @@ def list_properties(jail_name, **kwargs):
         salt '*' iocage.list_properties <jail_name>
         salt '*' iocage.list_properties defaults
     '''
+    props = ioc.IOCage(jail=jail_name).get("all")
+    return props
+
     props = _list_properties(jail_name, **kwargs)
 
     # hack to have the same output with defaults or for a given jail
@@ -266,7 +269,7 @@ def fetch(release=None, **kwargs):
 
 def get(jail_name, **kwargs):
     '''
-    Get a jail and its properties by name
+    Get all propeties for a jail
 
     CLI Example:
 
@@ -275,16 +278,16 @@ def get(jail_name, **kwargs):
         salt '*' iocage.get <jail_name>
     '''
     try:
-        jail = ioc.IOCage(jail=jail_name)
-        props = jail.get("all")
-
-        # iocage returns a substring match: search for 'test' returns 'test123'
-        # Return properties for exact-name jail only.
-        if props['host_hostname'] == jail_name:
-            return props
-
+        jail = None
+        iocage = ioc.IOCage(jail=jail_name)
+        for j in iocage.jails.items():
+            if j[0] == jail_name:
+                jail = iocage.get('all')
+                break
     except RuntimeError:
         return None
+
+    return jail
 
 
 def create(jail_type="full", template_id=None, **kwargs):
