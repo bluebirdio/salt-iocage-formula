@@ -49,25 +49,13 @@ def _exec(cmd, output='stdout'):
             'Error in command "%s" : %s' % (cmd, str(cmd_ret)))
 
 
-def _list_properties(jail_name, **kwargs):
-    '''
-    Returns result of iocage get all or iocage defaults (according to the
-    jail name)
-    '''
-    if jail_name == 'defaults':
-        cmd = 'iocage defaults'
-    else:
-        cmd = 'iocage get all %s' % (jail_name,)
-
-    return _exec(cmd).split('\n')
-
-
 def _parse_properties(**kwargs):
     '''
     Returns a rendered properties string used by iocage command line properties
     argument
     '''
-    default_properties = [p.split('=')[0] for p in _list_properties('defaults')]
+    default_properties = _get_default()
+
     default_properties.append('pkglist')
 
     for prop in kwargs.keys():
@@ -201,16 +189,8 @@ def list_properties(jail_name, **kwargs):
         salt '*' iocage.list_properties <jail_name>
         salt '*' iocage.list_properties defaults
     '''
-    props = ioc.IOCage(jail=jail_name).get("all")
-    return props
-
-    props = _list_properties(jail_name, **kwargs)
-
-    # hack to have the same output with defaults or for a given jail
-    if jail_name == 'defaults':
-        return '\n'.join(props)
-    else:
-        return '\n'.join([_.replace(':', '=', 1) for _ in props])
+    # Return the same output with defaults or for a given jail
+    return (jail_name == 'defaults') ? _get_default('all') : get(jail_name)
 
 
 def get_property(property_name, jail_name, **kwargs):
@@ -224,13 +204,9 @@ def get_property(property_name, jail_name, **kwargs):
         salt '*' iocage.get_property <property> <jail_name>
         salt '*' iocage.get_property <property> defaults
     '''
-    if jail_name == 'defaults':
-        jail_name = 'default'
 
-    if property_name == 'all':
-        return list_properties(jail_name, **kwargs)
-    else:
-        return _exec('iocage get %s %s' % (property_name, jail_name))
+    # Return the same output with defaults or for a given jail
+    return (jail_name == 'defaults') ? _get_default(property_name) : get(jail_name, property_name)
 
 
 def set_property(jail_name, **kwargs):
@@ -267,7 +243,7 @@ def fetch(release=None, **kwargs):
         return _exec('iocage fetch release=%s' % (release,))
 
 
-def get(jail_name, **kwargs):
+def get(jail_name, property='all', **kwargs):
     '''
     Get all propeties for a jail
 
@@ -282,12 +258,16 @@ def get(jail_name, **kwargs):
         iocage = ioc.IOCage(jail=jail_name)
         for j in iocage.jails.items():
             if j[0] == jail_name:
-                jail = iocage.get('all')
+                jail = iocage.get(property)
                 break
     except RuntimeError:
         return None
 
     return jail
+
+
+def _get_default(property='all'):
+    return iocage.IOCage(jail='default').get(property)
 
 
 def create(jail_type="full", template_id=None, **kwargs):
