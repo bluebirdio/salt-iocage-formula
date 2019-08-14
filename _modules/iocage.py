@@ -370,6 +370,19 @@ def restart(jail_name, **kwargs):
     return _manage_state('restart', jail_name, **kwargs)
 
 
+def update(jail_name, pkgs=False, **kwargs):
+    '''
+    Updates a jail to the latest patchset.
+
+    CLI Example:
+
+    .. code-block:: bash
+
+        salt '*' iocage.update <jail_name>
+    '''
+    return _iocage(jail=jail_name).update(pkgs)
+
+
 def destroy(jail_name, **kwargs):
     '''
     Destroy a jail
