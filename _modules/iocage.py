@@ -260,10 +260,11 @@ def create(jail_name, jail_type="full", template_id=None, **kwargs):
             'basejail':False,
             'thickjail':False,
             'empty':False,
-            'clone':None,
-            'skip_batch':False,
-            'thickconfig':False,
-            'clone_basejail':False
+            'clone':None
+            # These are relatively new: https://github.com/iocage/iocage/pull/867
+            #'skip_batch':False,
+            #'thickconfig':False,
+            #'clone_basejail':False
     }
 
     defaults = _defaults()
