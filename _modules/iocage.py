@@ -46,7 +46,7 @@ def _option_exists(name, **kwargs):
     '''
     Check if a given property `name` is in the all properties list
     '''
-    return name in list_properties(name, **kwargs)
+    return name in properties(name, **kwargs)
 
 
 def _filter_properties(jail, **kwargs):
@@ -133,7 +133,7 @@ def list_releases(**kwargs):
     return _iocage().list("base")
 
 
-def list_properties(jail_name, **kwargs):
+def properties(jail_name, **kwargs):
     '''
     List all properies for a given jail or defaults value
 
@@ -141,8 +141,8 @@ def list_properties(jail_name, **kwargs):
 
     .. code-block:: bash
 
-        salt '*' iocage.list_properties <jail_name>
-        salt '*' iocage.list_properties defaults
+        salt '*' iocage.properties <jail_name>
+        salt '*' iocage.properties defaults
     '''
     # Return the same output with defaults or for a given jail
     if (jail_name == 'defaults'):
@@ -347,7 +347,7 @@ def update(jail_name, pkgs=False, **kwargs):
 
     .. code-block:: bash
 
-        salt '*' iocage.update <jail_name>
+        salt '*' iocage.update <jail_name> [pkgs=False]
     '''
     return _iocage(jail=jail_name).update(pkgs)
 
