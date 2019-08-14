@@ -28,8 +28,18 @@ def __virtual__():
     else:
         return False
 
+
+def _iocage_error(content, exception):
+    if content['level'] in ['EXCEPTION', 'ERROR', 'CRITICAL']:
+        raise CommandExecutionError(content['message'])
+    else:
+        print(content['message'])
+    
+
 def _iocage(**kwargs):
-    return ioc.IOCage(**kwargs)
+    iocage = ioc.IOCage(**kwargs)
+    iocage.callback = '_iocage_error'
+    return iocage
 
 
 def _option_exists(name, **kwargs):
@@ -39,48 +49,36 @@ def _option_exists(name, **kwargs):
     return name in list_properties(name, **kwargs)
 
 
-def _exec(cmd, output='stdout'):
-    '''
-    Execute commad `cmd` and returns output `output` (by default returns the
-    stdout)
-    '''
-    cmd_ret = __salt__['cmd.run_all'](cmd)
-    if cmd_ret['retcode'] == 0:
-        return cmd_ret[output]
-    else:
-        raise CommandExecutionError(
-            'Error in command "%s" : %s' % (cmd, str(cmd_ret)))
-
-
-def _parse_properties(**kwargs):
+def _filter_properties(jail, **kwargs):
     '''
     Returns a rendered properties string used by iocage command line properties
     argument
     '''
-    default_properties = _get_default()
+    props = []
+    defaults = _defaults().keys()
 
-    default_properties.append('pkglist')
+    defaults.append('pkglist')
 
     for prop in kwargs.keys():
-        if not prop.startswith('__') and prop not in default_properties:
-            raise SaltInvocationError('Unknown property %s' % (prop,))
-
-    return ' '.join(
-        ['%s="%s"' % (k, v) for k, v in kwargs.items() if not k.startswith('__')])
+        if not prop.startswith('__'):
+            if prop not in defaults:
+                raise SaltInvocationError('Unknown property %s' % (prop,))
+            else:
+                props[prop] = kwargs[prop]
+        
+    return props
 
 
 def _manage_state(state, jail_name, **kwargs):
     '''
     Start / Stop / Reboot / Destroy a jail `jail_name`
     '''
-    jail = get(jail_name)
-
-    if jail is None:
-        raise SaltInvocationError('jail does not exist:' % (jail_name))
-    else
+    if get(jail_name) is None:
+        raise SaltInvocationError('jail does not exist: %s' % (jail_name,))
+    else:
         manager = _iocage(jail=jail_name)
 
-    running = (get_property('jid', jail_name) is not None)
+    running = (get_property('state', jail_name) is 'up')
 
     if (state == 'start'):
         if running:
@@ -88,7 +86,7 @@ def _manage_state(state, jail_name, **kwargs):
                 'jail %s is already started' % (jail_name,))
             manger.start()
     elif (state == 'stop'):
-        if !running:
+        if not running:
             raise SaltInvocationError(
                 'jail %s is not running' % (jail_name,))
             manger.stop()
@@ -106,7 +104,7 @@ def list_jails(**kwargs):
 
         salt '*' iocage.list_jails
     '''
-    return _iocage(jail=jail_name, skip_jails=True).list("all")
+    return _iocage().list("all")
 
 
 def list_templates(**kwargs):
@@ -148,7 +146,7 @@ def list_properties(jail_name, **kwargs):
     '''
     # Return the same output with defaults or for a given jail
     if (jail_name == 'defaults'):
-        return _get_default('all')
+        return _defaults('all')
     else: 
         return get(jail_name)
 
@@ -167,7 +165,7 @@ def get_property(property_name, jail_name, **kwargs):
 
     # Return the same output with defaults or for a given jail
     if (jail_name == 'defaults'):
-        return _get_default(property_name)
+        return _defaults(property_name)
     else: 
         return get(jail_name, property_name)
 
@@ -185,9 +183,11 @@ def set_property(jail_name, **kwargs):
     if jail_name == 'defaults':
         jail_name = 'default'
 
+    for k, v in _filter_properties(jail_name, **kwargs):
+        prop = k + '=' + v
 
-    return _iocage(jail=jail_name).set(prop)
-    return _exec('iocage set %s %s' % (_parse_properties(**kwargs), jail_name))
+        # Properties are expected as text: 'key=val'
+        _iocage(jail=jail_name).set(prop)
 
 
 def fetch(release=None, **kwargs):
@@ -233,7 +233,7 @@ def get(jail_name, property='all', **kwargs):
     return jail
 
 
-def _get_default(property='all'):
+def _defaults(property='all'):
     return _iocage(jail='default').get(property)
 
 
@@ -246,89 +246,58 @@ def create(jail_type="full", template_id=None, **kwargs):
     .. code-block:: bash
 
         salt '*' iocage.create [<option>] [<property=value>]
-
-            def create(self,
-               release,
-               props,
-               count=0,
-               pkglist=None,
-               template=False,
-               short=False,
-               _uuid=None,
-               basejail=False,
-               thickjail=False,
-               empty=False,
-               clone=None,
-               skip_batch=False,
-               thickconfig=False,
-               clone_basejail=False):
     '''
-    _options = ['full', 'clone', 'base', 'empty', 'template-clone']
-    defaults = _get_default()
 
-    if jail_type not in _options:
+    # These are the default inputs for iocage's create() call.
+    release = ''
+    args = {
+            'count':0,
+            'pkglist':None,
+            'template':False,
+            'short':False,
+            '_uuid':None,
+            'basejail':False,
+            'thickjail':False,
+            'empty':False,
+            'clone':None,
+            'skip_batch':False,
+            'thickconfig':False,
+            'clone_basejail':False
+    }
+
+    defaults = _defaults()
+
+    _jail_types = ['full', 'clone', 'base', 'empty', 'template-clone']
+
+    if jail_type not in _jail_types:
         raise SaltInvocationError('Unknown option %s' % (jail_type,))
+    else:
+        if jail_type == 'full':
+            args['thickjail'] = True
+        elif jail_type == 'base':
+            args['basejail'] = True
+        elif jail_type == 'empty':
+            args['empty'] = True
+        elif jail_type == 'clone':
+            if 'clone' in kwargs.keys():
+                args['clone'] = kwargs['clone']
+            else:
+                raise SaltInvocationError('Clone not specified for cloned jail')
+
 
     # Get release from arguments or from defaults.
-    if 'release' in kwargs.keys():
-        release = kwargs['release']
-    else:
-        release = defaults['release']
+    release = kwargs['release'] if ('release' in kwargs.keys()) else defaults['release']
     fetch(release)
 
-    properties = []
-    args = []
+    properties = _filter_properties(**kwargs)
 
-    return _iocage().create(release, properties, args)
 
     # check template exists for cloned template
     if jail_type == 'template-clone':
         if template_id == None:
             raise SaltInvocationError('template_id not specified for cloned template')
-        templates = __salt__['iocage.list_templates']().split('\n')
-        tmpl_exists = False
-        for tmpl in templates:
-            tmpl_datas = {t.split('=')[0]: '='.join(t.split('=')[1:])
-                          for t in tmpl.split(',')}
-            if tmpl_datas['TAG'] == template_id or tmpl_datas['UUID'] == template_id:
-                tmpl_exists = True
-                break
-        if tmpl_exists == False:
-            raise SaltInvocationError('Template id %s does not exist' % (template_id,))
 
-
-    # stringify the kwargs dict into iocage create properties format
-    properties = _parse_properties(**kwargs)
-
-    # if we would like to specify a tag value for the jail
-    # check if another jail have not the same tag
-    if 'tag' in kwargs.keys():
-        if kwargs['tag'] in [k['TAG'] for k in list_jails()]:
-            raise SaltInvocationError(
-                'Tag %s already exists' % (kwargs['tag'],))
-
-    pre_cmd = 'iocage create'
-    if jail_type == 'clone':
-        pre_cmd = 'iocage create -c'
-    if jail_type == 'base':
-        pre_cmd = 'iocage create -b'
-    if jail_type == 'empty':
-        pre_cmd = 'iocage create -e'
-    if jail_type == 'template-clone':
-        pre_cmd = 'iocage clone %s' % (template_id)
-
-    # fetch a release if it's the first install
-    existing_release = list_releases()
-    if len(existing_release) == 0:
-        fetch()
-
-
-    if len(properties) > 0:
-        cmd = '%s %s' % (pre_cmd, properties)
-    else:
-        cmd = 'iocage create %s' % (properties,)
-    return _exec(cmd)
-
+    return _iocage().create(release, properties, args)
 
 
 def start(jail_name, **kwargs):
