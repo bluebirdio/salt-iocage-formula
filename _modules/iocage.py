@@ -50,7 +50,7 @@ def _option_exists(name, **kwargs):
     return name in properties(name, **kwargs)
 
 
-def _filter_properties(properties):
+def filter_properties(properties):
     '''
     Returns a rendered properties string used by iocage command line properties
     argument
@@ -187,7 +187,7 @@ def set_property(jail_name, **kwargs):
     if jail_name == 'defaults':
         jail_name = 'default'
 
-    for k, v in _filter_properties(kwargs):
+    for k, v in filter_properties(kwargs):
         prop = k + '=' + v
 
         # Properties are expected as text: 'key=val'
@@ -267,6 +267,7 @@ def create(jail_name, jail_type="full", template_id=None, **kwargs):
             #'clone_basejail':False
     }
 
+    iocage = _iocage()
     defaults = _defaults()
 
     _jail_types = ['full', 'clone', 'base', 'empty', 'template-clone']
@@ -290,7 +291,7 @@ def create(jail_name, jail_type="full", template_id=None, **kwargs):
     # Get release from arguments or from defaults.
     release = kwargs['release'] if ('release' in kwargs.keys()) else None
 
-    properties = _filter_properties(kwargs)
+    properties = filter_properties(kwargs)
 
     # TODO This may be an unpopular assumption.
     args['_uuid'] = jail_name
@@ -300,12 +301,19 @@ def create(jail_name, jail_type="full", template_id=None, **kwargs):
         if template_id == None:
             raise SaltInvocationError('template_id not specified for cloned template')
         else:
-            args['template'] = template_id
+            args['template'] = True
+            release = template_id
+            iocage.jail = template_id
+    elif jail_type is 'clone':
+        args['clone'] = template_id
+        iocage.jail = template_id
     elif jail_type is 'empty' and release is None:
         raise SaltInvocationError('Must specify a release or a template_id')
 
     print(args)
-    return _iocage().create(release, properties, **args)
+    print(properties)
+    print(iocage.jails.items())
+    return iocage.create(release, properties, **args)
 
 
 def start(jail_name, **kwargs):
