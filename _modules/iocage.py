@@ -43,13 +43,6 @@ def _iocage(**kwargs):
     return ioc.IOCage(**kwargs)
 
 
-def _option_exists(name, **kwargs):
-    '''
-    Check if a given property `name` is in the all properties list
-    '''
-    return name in properties(name, **kwargs)
-
-
 def filter_properties(properties):
     '''
     Returns a rendered properties string used by iocage command line properties
