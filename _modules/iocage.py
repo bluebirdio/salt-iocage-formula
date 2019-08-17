@@ -167,7 +167,19 @@ def get_property(property_name, jail_name, **kwargs):
         return get(jail_name, property_name)
 
 
-def set_property(jail_name, **kwargs):
+def _format_properties(properties):
+    '''
+    iocage expects properties as 'k=v' strings:
+    Return a list of strings appropriate for set_properties and create functions.
+    '''
+    # Properties are expected as text: 'key=val'
+    formatted = []
+    for k, v in filter_properties(properties).items():
+        formatted.append(k + '=' + v)
+    return formatted
+
+
+def set_properties(jail_name, **kwargs):
     '''
     Set property value for a given jail
 
@@ -175,16 +187,15 @@ def set_property(jail_name, **kwargs):
 
     .. code-block:: bash
 
-        salt '*' iocage.set_property <jail_name> [<property=value>]
+        salt '*' iocage.set_properties <jail_name> [<property=value>]
     '''
     if jail_name == 'defaults':
         jail_name = 'default'
 
-    for k, v in filter_properties(kwargs):
-        prop = k + '=' + v
-
-        # Properties are expected as text: 'key=val'
-        _iocage(jail=jail_name).set(prop)
+    ret = True
+    for prop in _format_properties(kwargs):
+        ret = ret and _iocage(jail=jail_name).set(prop)
+    return ret
 
 
 def fetch(release, **kwargs):
@@ -231,7 +242,7 @@ def _defaults(property='all'):
     return _iocage(jail='default').get(property)
 
 
-def create(jail_name, jail_type="full", template_id=None, **kwargs):
+def create(jail_name, jail_type="full", template_id=None, properties={}, **kwargs):
     '''
     Create a new jail
 
@@ -284,7 +295,7 @@ def create(jail_name, jail_type="full", template_id=None, **kwargs):
     # Get release from arguments or from defaults.
     release = kwargs['release'] if ('release' in kwargs.keys()) else None
 
-    properties = filter_properties(kwargs)
+    properties = _format_properties(properties)
 
     # TODO This may be an unpopular assumption.
     args['_uuid'] = jail_name
