@@ -167,16 +167,12 @@ def get_property(property_name, jail_name, **kwargs):
         return get(jail_name, property_name)
 
 
-def _format_properties(properties):
+def _format_property(name, value):
     '''
     iocage expects properties as 'k=v' strings:
     Return a list of strings appropriate for set_properties and create functions.
     '''
-    # Properties are expected as text: 'key=val'
-    formatted = []
-    for k, v in filter_properties(properties).items():
-        formatted.append(k + '=' + v)
-    return formatted
+    return name + '=' + str(value)
 
 
 def set_properties(jail_name, **kwargs):
@@ -192,10 +188,34 @@ def set_properties(jail_name, **kwargs):
     if jail_name == 'defaults':
         jail_name = 'default'
 
-    ret = True
-    for prop in _format_properties(kwargs):
-        ret = ret and _iocage(jail=jail_name).set(prop)
-    return ret
+    exclusions = ['CONFIG_VERSION']
+
+    iocage = _iocage(jail=jail_name)
+
+    # "Before" state; current state of the jail.
+    current = iocage.get('all')
+
+    # Desired state is defaults + passed-in properties.
+    desired = _iocage(jail='default').get('all')
+    desired.update(kwargs)
+
+    result = True
+    changes = {}
+    for key, val in desired.items():
+        if key in exclusions:
+            continue
+
+        prop = _format_property(key, val)
+        orig = _format_property(key, current[key])
+
+        if prop != orig:
+            iocage.set(prop)
+            changes[key] = {'new': val, 'old': current[key]}
+
+            # Verify that the property has changed.
+            result = result and (val== iocage.get(key))
+
+    return {'result': result, 'changes': changes }
 
 
 def fetch(release, **kwargs):
@@ -295,7 +315,10 @@ def create(jail_name, jail_type="full", template_id=None, properties={}, **kwarg
     # Get release from arguments or from defaults.
     release = kwargs['release'] if ('release' in kwargs.keys()) else None
 
-    properties = _format_properties(properties)
+    print(properties)
+    property_list = []
+    for k, v in filter_properties(properties).items():
+        property_list.append(_format_property(k, v))
 
     # TODO This may be an unpopular assumption.
     args['_uuid'] = jail_name
@@ -317,7 +340,7 @@ def create(jail_name, jail_type="full", template_id=None, properties={}, **kwarg
     print(args)
     print(properties)
     print(iocage.jails.items())
-    return iocage.create(release, properties, **args)
+    return iocage.create(release, property_list, **args)
 
 
 def start(jail_name, **kwargs):
