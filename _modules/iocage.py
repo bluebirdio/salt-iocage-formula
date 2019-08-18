@@ -80,15 +80,15 @@ def _manage_state(state, jail_name, **kwargs):
     if (state == 'start'):
         if running:
             raise SaltInvocationError('jail %s is already started' % (jail_name,))
-        manger.start()
+        manager.start()
 
     elif (state == 'stop'):
         if not running:
             raise SaltInvocationError('jail %s is not running' % (jail_name,))
-        manger.stop()
+        manager.stop()
 
     elif (state == 'restart'):
-        manger.restart()
+        manager.restart()
 
 
 def list_jails(**kwargs):
@@ -188,7 +188,7 @@ def set_properties(jail_name, **kwargs):
     if jail_name == 'defaults':
         jail_name = 'default'
 
-    exclusions = ['CONFIG_VERSION']
+    exclusions = ['CONFIG_VERSION', 'last_started']
 
     iocage = _iocage(jail=jail_name)
 
@@ -198,6 +198,10 @@ def set_properties(jail_name, **kwargs):
     # Desired state is defaults + passed-in properties.
     desired = _iocage(jail='default').get('all')
     desired.update(kwargs)
+
+    # Special case for state: you can't change this value.
+    desired_state = (desired.pop('state', current['state']) == 'up')
+    current_state = (current['state'] == 'up')
 
     result = True
     changes = {}
@@ -213,7 +217,11 @@ def set_properties(jail_name, **kwargs):
             changes[key] = {'new': val, 'old': current[key]}
 
             # Verify that the property has changed.
-            result = result and (val== iocage.get(key))
+            result = result and (prop == _format_property(key, iocage.get(key)))
+
+    if current_state != desired_state:
+        action = 'start' if desired_state else 'stop'
+        _manage_state(action, jail_name)
 
     return {'result': result, 'changes': changes }
 
