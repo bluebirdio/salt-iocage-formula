@@ -49,12 +49,12 @@ def filter_properties(properties):
     argument
     '''
     filtered = {}
-    defaults = _defaults()
+    defaults = list(_defaults())
 
     # Append pkglist, which is valid for create.
-    defaults['pkglist'] = ''
-
-    defaults = defaults.keys()
+    defaults.append('pkglist')
+    defaults.append('state')
+    defaults.append('release')
 
     for prop in properties.keys():
         if not prop.startswith('__'):
@@ -188,7 +188,8 @@ def set_properties(jail_name, **kwargs):
     if jail_name == 'defaults':
         jail_name = 'default'
 
-    exclusions = ['CONFIG_VERSION', 'last_started']
+    exclusions = ['CONFIG_VERSION', 'last_started', 'mountpoint',
+            'origin', 'used', 'available']
 
     iocage = _iocage(jail=jail_name)
 
@@ -309,6 +310,7 @@ def create(jail_name, jail_type="full", template_id=None, properties={}, **kwarg
     else:
         if jail_type == 'full':
             args['thickjail'] = True
+            template_id = release
         elif jail_type == 'base':
             args['basejail'] = True
         elif jail_type == 'empty':
