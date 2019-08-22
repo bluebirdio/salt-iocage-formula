@@ -66,8 +66,9 @@ def managed(name, properties={}, jail_type="full", template_id=None, **kwargs):
            'comment': '',
            'result': False}
 
-    if len(kwargs.keys()) > 0 :
-        properties.update(**kwargs)
+    print(__salt__['environ.items']())
+    #if len(kwargs.keys()) > 0 :
+        #properties.update(**kwargs)
 
     # Get all properties for this jail
     jail = __salt__['iocage.get'](name)
@@ -75,7 +76,7 @@ def managed(name, properties={}, jail_type="full", template_id=None, **kwargs):
     # The jail does not exist. Create it!
     if jail is None:
         if not __opts__['test']:
-            properties = __salt__['iocage.filter_properties'](properties)
+            #properties = __salt__['iocage.filter_properties'](properties)
 
             ret['comment'] = 'Creating iocage jail.'
             ret['result'] = __salt__['iocage.create'](jail_name=name, jail_type=jail_type, template_id=template_id, properties=properties, **kwargs)

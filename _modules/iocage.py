@@ -52,15 +52,13 @@ def filter_properties(properties):
     defaults = list(_defaults())
 
     # Append pkglist, which is valid for create.
-    defaults.append('pkglist')
-    defaults.append('state')
-    defaults.append('release')
+    #defaults.append('pkglist')
+    #defaults.append('state')
+    #defaults.append('release')
 
     for prop in properties.keys():
         if not prop.startswith('__'):
-            if prop not in defaults:
-                raise SaltInvocationError('Unknown property %s' % (prop,))
-            else:
+            if prop in defaults:
                 filtered[prop] = properties[prop]
         
     return filtered
@@ -211,7 +209,7 @@ def set_properties(jail_name, **kwargs):
             continue
 
         prop = _format_property(key, val)
-        orig = _format_property(key, current[key])
+        orig = _format_property(key, current[key]) if key in current else ""
 
         if prop != orig:
             iocage.set(prop)
@@ -325,10 +323,19 @@ def create(jail_name, jail_type="full", template_id=None, properties={}, **kwarg
     # Get release from arguments or from defaults.
     release = kwargs['release'] if ('release' in kwargs.keys()) else None
 
+    # Get package list from arguments
+    args['pkglist'] = kwargs['pkglist'] if ('pkglist' in kwargs.keys()) else None
+
+    # State can not be passed in as a property but we want to know about it.
+    desired_state = (properties.pop('state', None) == 'up')
+
     print(properties)
     property_list = []
-    for k, v in filter_properties(properties).items():
+    for k, v in properties.items():
         property_list.append(_format_property(k, v))
+    #for k, v in filter_properties(properties).items():
+        #property_list.append(_format_property(k, v))
+
 
     # TODO This may be an unpopular assumption.
     args['_uuid'] = jail_name
@@ -350,7 +357,10 @@ def create(jail_name, jail_type="full", template_id=None, properties={}, **kwarg
     print(args)
     print(properties)
     print(iocage.jails.items())
-    return iocage.create(release, property_list, **args)
+    result = iocage.create(release, property_list, **args)
+    result = result and (start(jail_name) if desired_state else True)
+
+    return result
 
 
 def start(jail_name, **kwargs):
