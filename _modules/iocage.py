@@ -326,6 +326,10 @@ def create(jail_name, jail_type="full", template_id=None, properties={}, **kwarg
     # Get package list from arguments
     args['pkglist'] = kwargs['pkglist'] if ('pkglist' in kwargs.keys()) else None
 
+    # Copy the package list locally, if necessary.
+    if str(args['pkglist'])[0:7] == 'salt://':
+        args['pkglist'] = __salt__['cp.cache_file'](args['pkglist'])
+
     # State can not be passed in as a property but we want to know about it.
     desired_state = (properties.pop('state', None) == 'up')
 
