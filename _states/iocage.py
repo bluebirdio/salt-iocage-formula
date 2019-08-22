@@ -66,10 +66,6 @@ def managed(name, properties={}, jail_type="full", template_id=None, **kwargs):
            'comment': '',
            'result': False}
 
-    print(__salt__['environ.items']())
-    #if len(kwargs.keys()) > 0 :
-        #properties.update(**kwargs)
-
     # Get all properties for this jail
     jail = __salt__['iocage.get'](name)
 
