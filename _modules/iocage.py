@@ -186,7 +186,7 @@ def set_properties(jail_name, **kwargs):
     if jail_name == 'defaults':
         jail_name = 'default'
 
-    exclusions = ['CONFIG_VERSION', 'last_started', 'mountpoint',
+    exclusions = ['CONFIG_VERSION', 'last_started', 'type', 'mountpoint',
             'origin', 'used', 'available']
 
     iocage = _iocage(jail=jail_name)
@@ -212,6 +212,10 @@ def set_properties(jail_name, **kwargs):
         orig = _format_property(key, current[key]) if key in current else ""
 
         if prop != orig:
+            if key in ['template'] and current_state:
+                _manage_state('stop', jail_name)
+                current_state = False
+
             iocage.set(prop)
             changes[key] = {'new': val, 'old': current[key]}
 
@@ -223,6 +227,10 @@ def set_properties(jail_name, **kwargs):
         _manage_state(action, jail_name)
 
     return {'result': result, 'changes': changes }
+
+
+def set_property(jail_name, key, val, **kwargs):
+        return (prop == _format_property(key, iocage.get(key)))
 
 
 def fetch(release, **kwargs):
@@ -269,7 +277,7 @@ def _defaults(property='all'):
     return _iocage(jail='default').get(property)
 
 
-def create(jail_name, jail_type="full", template_id=None, properties={}, **kwargs):
+def create(jail_name, jail_type='clone', template_id=None, properties={}, **kwargs):
     '''
     Create a new jail
 
@@ -298,30 +306,16 @@ def create(jail_name, jail_type="full", template_id=None, properties={}, **kwarg
             #'clone_basejail':False
     }
 
-    iocage = _iocage()
-    defaults = _defaults()
+    iocage = _iocage(skip_jails=True)
+    #defaults = _defaults()
 
-    _jail_types = ['full', 'clone', 'base', 'empty', 'template-clone']
+    _jail_types = ['full', 'clone', 'base', 'empty', 'template', 'template-clone']
 
     if jail_type not in _jail_types:
         raise SaltInvocationError('Unknown option %s' % (jail_type,))
-    else:
-        if jail_type == 'full':
-            args['thickjail'] = True
-            template_id = release
-        elif jail_type == 'base':
-            args['basejail'] = True
-        elif jail_type == 'empty':
-            args['empty'] = True
-        elif jail_type == 'clone':
-            if 'clone' in kwargs.keys():
-                args['clone'] = kwargs['clone']
-            else:
-                raise SaltInvocationError('Clone not specified for cloned jail')
-
 
     # Get release from arguments or from defaults.
-    release = kwargs['release'] if ('release' in kwargs.keys()) else None
+    release = kwargs['release'] if ('release' in kwargs.keys()) else 'latest'
 
     # Get package list from arguments
     args['pkglist'] = kwargs['pkglist'] if ('pkglist' in kwargs.keys()) else None
@@ -333,34 +327,51 @@ def create(jail_name, jail_type="full", template_id=None, properties={}, **kwarg
     # State can not be passed in as a property but we want to know about it.
     desired_state = (properties.pop('state', None) == 'up')
 
-    print(properties)
     property_list = []
     for k, v in properties.items():
         property_list.append(_format_property(k, v))
     #for k, v in filter_properties(properties).items():
         #property_list.append(_format_property(k, v))
 
-
     # TODO This may be an unpopular assumption.
     args['_uuid'] = jail_name
+    
 
     # check template exists for cloned template
-    if jail_type == 'template-clone':
-        if template_id == None:
-            raise SaltInvocationError('template_id not specified for cloned template')
-        else:
-            args['template'] = True
-            release = template_id
-            iocage.jail = template_id
-    elif jail_type is 'clone':
-        args['clone'] = template_id
-        iocage.jail = template_id
-    elif jail_type is 'empty' and release is None:
-        raise SaltInvocationError('Must specify a release or a template_id')
 
+    if jail_type == 'full':
+        args['thickjail'] = True
+
+    elif jail_type == 'base':
+        args['basejail'] = True
+
+    elif jail_type == 'empty':
+        args['empty'] = True
+        release = 'EMPTY'
+
+    if jail_type == 'template':
+        #args['template'] = True
+        #args['clone'] = release
+        # TODO get release here?
+        pass
+    elif jail_type == 'clone':
+        #args['clone'] = template_id
+        #iocage.jail = template_id
+        #release = template_id
+        if 'clone' in kwargs.keys():
+            args['clone'] = kwargs['clone']
+        elif template_id:
+            #release = template_id
+            #args['clone'] = template_id
+            #iocage.jail = template_id
+            release = template_id
+            args['template'] = template_id
+        else:
+            pass
+
+    print("release:" + str(release))
     print(args)
-    print(properties)
-    print(iocage.jails.items())
+    print(property_list)
     result = iocage.create(release, property_list, **args)
     result = result and (start(jail_name) if desired_state else True)
 

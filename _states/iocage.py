@@ -6,25 +6,27 @@ from __future__ import absolute_import
 import logging
 log = logging.getLogger(__name__)
 
-def _property(name, value, jail, **kwargs):
+def property(name, value, jail='default', **kwargs):
     ret = {'name': name,
            'changes': {},
            'comment': '',
            'result': False}
 
+    print("HELLP")
+    print(name)
+    print(value)
+    print(jail)
     try:
         old_value = __salt__['iocage.get_property'](name, jail, **kwargs)
+        print(old_value)
 
-        if jail == 'defaults':
-            jail = 'default'
     except:
         if __opts__['test']:
             ret['result'] = None
             if jail == 'default':
-                ret['comment'] = 'default option %s seems do not exist' % (
-                    name,)
+                ret['comment'] = 'default option %s doesn\'t exist' % ( name,)
             else:
-                ret['comment'] = 'jail option %s seems do not exist' % (name,)
+                ret['comment'] = 'jail option %s seems to not exist' % (name,)
         else:
             ret['result'] = False
             if jail == 'default':
@@ -33,15 +35,8 @@ def _property(name, value, jail, **kwargs):
                 ret['comment'] = 'jail option %s does not exist' % (name,)
     else:
         if value != old_value:
-            ret['changes'] = {'new': value, 'old': old_value}
-
             if not __opts__['test']:
-                try:
-                    __salt__['iocage.set_property'](jail, **{name: value})
-                except:
-                    ret['result'] = False
-                else:
-                    ret['result'] = True
+                ret.update(__salt__['iocage.set_properties'](jail, **{name: value}))
             else:
                 ret['result'] = None
         else:
@@ -53,14 +48,7 @@ def _property(name, value, jail, **kwargs):
     return ret
 
 
-def property(name, value, jail=None, **kwargs):
-    if jail is None:
-        return _property(name, value, 'defaults', **kwargs)
-    else:
-        return _property(name, value, jail, **kwargs)
-
-
-def managed(name, properties={}, jail_type="full", template_id=None, **kwargs):
+def managed(name, properties={}, jail_type="clone", template_id=None, **kwargs):
     ret = {'name': name,
            'changes': {},
            'comment': '',
