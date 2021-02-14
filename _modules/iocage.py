@@ -195,7 +195,9 @@ def set_properties(jail_name, **kwargs):
     current = iocage.get('all')
 
     # Desired state is defaults + passed-in properties.
-    desired = _iocage(jail='default').get('all')
+    #desired = _iocage(jail='default').get('all')
+    #desired.update(kwargs)
+    desired = {}
     desired.update(kwargs)
 
     # Special case for state: you can't change this value.
@@ -251,7 +253,7 @@ def fetch(release, **kwargs):
 
 def get(jail_name, property='all', **kwargs):
     '''
-    Get all propeties for a jail
+    Get all properties for a jail
 
     CLI Example:
 
@@ -325,7 +327,7 @@ def create(jail_name, jail_type='clone', template_id=None, properties={}, **kwar
         args['pkglist'] = __salt__['cp.cache_file'](args['pkglist'])
 
     # State can not be passed in as a property but we want to know about it.
-    desired_state = (properties.pop('state', None) == 'up')
+    desired_state = (properties.pop('state', 'on') == 'on')
 
     property_list = []
     for k, v in properties.items():
