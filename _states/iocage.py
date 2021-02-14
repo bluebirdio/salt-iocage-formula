@@ -12,13 +12,8 @@ def property(name, value, jail='default', **kwargs):
            'comment': '',
            'result': False}
 
-    print("HELLP")
-    print(name)
-    print(value)
-    print(jail)
     try:
         old_value = __salt__['iocage.get_property'](name, jail, **kwargs)
-        print(old_value)
 
     except:
         if __opts__['test']:
